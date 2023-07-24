@@ -930,7 +930,8 @@
     UIView *result = [super hitTest:point withEvent:event];
     if (result == self) {
         if (!self.popupContainerView.automaticallyHidesWhenUserTap) {
-            return nil;
+            // 这里不返回nil，不然当automaticallyHidesWhenUserTap为false时，点击浮层会造成穿透
+            // return nil;
         }
     }
     return result;
