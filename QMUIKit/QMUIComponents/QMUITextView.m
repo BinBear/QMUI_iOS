@@ -186,6 +186,9 @@ const UIEdgeInsets kSystemTextViewFixTextInsets = {0, 5, 0, 5};
     if (self.placeholderColor) {
         self.placeholderLabel.textColor = self.placeholderColor;
     }
+    if (self.placeholderFont) {
+        self.placeholderLabel.font = self.placeholderFont;
+    }
     [self sendSubviewToBack:self.placeholderLabel];
     [self setNeedsLayout];
     [self updatePlaceholderLabelHidden];
@@ -194,6 +197,11 @@ const UIEdgeInsets kSystemTextViewFixTextInsets = {0, 5, 0, 5};
 - (void)setPlaceholderColor:(UIColor *)placeholderColor {
     _placeholderColor = placeholderColor;
     self.placeholderLabel.textColor = _placeholderColor;
+}
+
+- (void)setPlaceholderFont:(UIFont *)placeholderFont {
+    _placeholderFont = placeholderFont;
+    self.placeholderLabel.font = _placeholderFont;
 }
 
 - (void)updatePlaceholderStyle {
