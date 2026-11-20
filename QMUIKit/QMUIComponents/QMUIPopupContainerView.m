@@ -379,7 +379,7 @@
     // 每次都要重新定义 block，否则当不同的 popup 在同一个 sourceBarItem 显示，这个 block 内部得到的 weakSelf 可能是前一次的
     sourceBarItem.qmui_viewLayoutDidChangeBlock = ^(__kindof UIBarItem * _Nonnull item, UIView * _Nullable view) {
         if (!view.window || !weakSelf.superview) return;
-        UIView *convertToView = weakSelf.popupWindow ? UIApplication.sharedApplication.delegate.window : weakSelf.superview;// 对于以 window 方式显示的情况，由于横竖屏旋转时，不同 window 的旋转顺序不同，所以可能导致 sourceBarItem 所在的 window 已经旋转了但 popupWindow 还没旋转（iOS 11 及以后），那么计算出来的坐标就错了，所以这里改为用 UIApplication window
+        UIView *convertToView = weakSelf.popupWindow ?: weakSelf.superview;
         CGRect rect = [view qmui_convertRect:view.bounds toView:convertToView];
         weakSelf.sourceRect = rect;
     };
@@ -399,7 +399,7 @@
     __weak __typeof(self)weakSelf = self;
     sourceView.qmui_frameDidChangeBlock = ^(__kindof UIView * _Nonnull view, CGRect precedingFrame) {
         if (!view.window || !weakSelf.superview) return;
-        UIView *convertToView = weakSelf.popupWindow ? UIApplication.sharedApplication.delegate.window : weakSelf.superview;// 对于以 window 方式显示的情况，由于横竖屏旋转时，不同 window 的旋转顺序不同，所以可能导致 sourceBarItem 所在的 window 已经旋转了但 popupWindow 还没旋转（iOS 11 及以后），那么计算出来的坐标就错了，所以这里改为用 UIApplication window
+        UIView *convertToView = weakSelf.popupWindow ?: weakSelf.superview;
         CGRect rect = [view qmui_convertRect:view.bounds toView:convertToView];
         weakSelf.sourceRect = rect;
     };
@@ -697,7 +697,7 @@
         QMUICommonViewController *viewController = (QMUICommonViewController *)self.popupWindow.rootViewController;
         viewController.supportedOrientationMask = [QMUIHelper visibleViewController].supportedInterfaceOrientations;
         
-        self.previousKeyWindow = UIApplication.sharedApplication.keyWindow;
+        self.previousKeyWindow = [self keyWindowForPopupScene];
         [self.popupWindow makeKeyAndVisible];
         
         isShowingByWindowMode = YES;
@@ -798,7 +798,7 @@
 - (void)hideCompletionWithWindowMode:(BOOL)windowMode completion:(void (^)(BOOL))completion {
     if (windowMode) {
         // 恢复 keyWindow 之前做一下检查，避免类似问题 https://github.com/Tencent/QMUI_iOS/issues/90
-        if (UIApplication.sharedApplication.keyWindow == self.popupWindow) {
+        if (self.popupWindow.isKeyWindow) {
             [self.previousKeyWindow makeKeyWindow];
         }
         
@@ -833,19 +833,45 @@
     return subview && !subview.hidden && subview.superview;
 }
 
+/// 记录同一场景中原本接收输入的窗口，避免关闭菜单时切换到其他场景。
+- (UIWindow *)keyWindowForPopupScene {
+    if (@available(iOS 13.0, *)) {
+        UIWindowScene *scene = self.popupWindow.windowScene;
+        if (scene) {
+            if (@available(iOS 15.0, *)) return scene.keyWindow;
+            for (UIWindow *window in scene.windows) {
+                if (window.isKeyWindow) return window;
+            }
+            return nil;
+        }
+    }
+    return UIApplication.sharedApplication.keyWindow;
+}
+
+/// 优先使用锚点所在场景；仅指定 sourceRect 时沿用当前窗口的场景。
 - (void)initPopupContainerViewWindowIfNeeded {
     if (!self.popupWindow) {
-        self.popupWindow = [[QMUIPopupContainerViewWindow alloc] init];
+        if (@available(iOS 13.0, *)) {
+            UIWindow *sourceWindow = self.sourceBarItem.qmui_view.window ?: self.sourceView.window;
+            UIWindowScene *scene = sourceWindow.windowScene
+                ?: UIApplication.sharedApplication.keyWindow.windowScene;
+            if (scene) {
+                self.popupWindow = [[QMUIPopupContainerViewWindow alloc] initWithWindowScene:scene];
+            }
+        }
+        if (!self.popupWindow) {
+            self.popupWindow = [[QMUIPopupContainerViewWindow alloc] init];
+        }
         self.popupWindow.qmui_capturesStatusBarAppearance = NO;
         self.popupWindow.backgroundColor = UIColorClear;
         self.popupWindow.windowLevel = UIWindowLevelQMUIAlertView;
         QMUIPopContainerViewController *viewController = [[QMUIPopContainerViewController alloc] init];
         ((QMUIPopContainerMaskControl *)viewController.view).popupContainerView = self;
-        if (self.automaticallyHidesWhenUserTap) {
+//        if (self.automaticallyHidesWhenUserTap) {
             viewController.view.backgroundColor = self.maskViewBackgroundColor;
-        } else {
-            viewController.view.backgroundColor = UIColorClear;
-        }
+//        } else {
+//            viewController.view.backgroundColor = UIColorClear;
+//        }
         viewController.supportedOrientationMask = [QMUIHelper visibleViewController].supportedInterfaceOrientations;
         self.popupWindow.rootViewController = viewController;// 利用 rootViewController 来管理横竖屏
         [self.popupWindow.rootViewController.view addSubview:self];
@@ -1066,7 +1092,8 @@
     UIView *result = [super hitTest:point withEvent:event];
     if (result == self) {
         if (!self.popupContainerView.automaticallyHidesWhenUserTap) {
-            return nil;
+            // 这里不返回nil，不然当automaticallyHidesWhenUserTap为false时，点击浮层会造成穿透
+            // return nil;
         }
     }
     return result;
