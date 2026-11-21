@@ -573,7 +573,7 @@ static CGFloat pixelOne = -1.0f;
             name = dict[model];
         }
         if (name.length == 0) name = model;
-        if ([self vv_isSimulator]) name = [name stringByAppendingString:@" Simulator"];
+        if (IS_SIMULATOR) name = [name stringByAppendingString:@" Simulator"];
     });
     return name;
 }
